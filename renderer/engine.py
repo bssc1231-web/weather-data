@@ -273,8 +273,8 @@ def header(img, spec, title, t_in):
     bw = text_w(d, brand, fb) + 44
     d.rounded_rectangle([50, 130, 50 + bw, 196], radius=33, fill=(255, 214, 64))
     d.text((72, 136), brand, font=fb, fill=INK)
-    fd = font(38, "Medium")
-    d.text((50 + bw + 20, 140), spec.get("date_label", ""), font=fd, fill=(200, 220, 245))
+    fd = font(48, "Black")
+    d.text((50 + bw + 22, 132), spec.get("date_label", ""), font=fd, fill=WHITE)
     if title:
         ft = font(66, "Black")
         layer = Image.new("RGBA", (W, 120), (0, 0, 0, 0)); dl = ImageDraw.Draw(layer)
@@ -560,27 +560,35 @@ def make_thumb(spec, path):
                        (cx + math.cos(a + 0.08) * 1400, cy + math.sin(a + 0.08) * 1400)], fill=(255, 255, 255, 22))
     img.alpha_composite(fx.filter(ImageFilter.GaussianBlur(1.2)))
     d = ImageDraw.Draw(img)
-    # brand + date
-    fb = font(52, "Black"); brand = spec.get("brand", "")
-    bw = d.textlength(brand, font=fb) + 56
-    d.rounded_rectangle([60, 120, 60 + bw, 206], radius=43, fill=(255, 214, 64))
-    d.text((88, 128), brand, font=fb, fill=INK)
-    fd = font(46, "Bold"); dl = re.sub(r"\s*·.*$", "", spec.get("date_label", ""))
-    d.text((60 + bw + 24, 136), dl, font=fd, fill=WHITE, stroke_width=4, stroke_fill=stroke)
+    # brand (작게) + 날짜 리본 (크게)
+    fb = font(46, "Black"); brand = spec.get("brand", "")
+    bw = d.textlength(brand, font=fb) + 48
+    d.rounded_rectangle([W / 2 - bw / 2, 96, W / 2 + bw / 2, 172], radius=38, fill=(255, 214, 64))
+    d.text((W / 2 - bw / 2 + 24, 103), brand, font=fb, fill=INK)
+    dl = re.sub(r"\s*·.*$", "", spec.get("date_label", ""))
+    m = re.match(r"\s*(\d{1,2})\.(\d{1,2})\s*\((.)\)", dl)
+    dtxt = f"{int(m.group(1))}월 {int(m.group(2))}일 {m.group(3)}요일" if m else dl
+    fdt = font(92, "Black"); dw = d.textlength(dtxt, font=fdt)
+    sh0 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ImageDraw.Draw(sh0).rounded_rectangle(
+        [W / 2 - dw / 2 - 44 + 8, 196 + 12, W / 2 + dw / 2 + 44 + 8, 330 + 12], radius=30, fill=(0, 0, 0, 110))
+    img.alpha_composite(sh0.filter(ImageFilter.GaussianBlur(8))); d = ImageDraw.Draw(img)
+    d.rounded_rectangle([W / 2 - dw / 2 - 44, 196, W / 2 + dw / 2 + 44, 330], radius=30, fill=(255, 255, 255), outline=stroke, width=6)
+    d.text((W / 2 - dw / 2, 208), dtxt, font=fdt, fill=INK)
+    OFF = 60
     # top line
     if th.get("top"):
         ft = fit_font(d, th["top"], "Black", 130, 960)
         tw = d.textlength(th["top"], font=ft)
-        d.text((W / 2 - tw / 2, 330), th["top"], font=ft, fill=WHITE, stroke_width=10, stroke_fill=stroke)
+        d.text((W / 2 - tw / 2, 330 + OFF), th["top"], font=ft, fill=WHITE, stroke_width=10, stroke_fill=stroke)
     # big number with shadow
     big = th.get("big", "")
     fbig = fit_font(d, big, "Black", 400, 1000)
     bw2 = d.textlength(big, font=fbig)
     sh = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ds = ImageDraw.Draw(sh)
-    ds.text((W / 2 - bw2 / 2 + 14, 500 + 18), big, font=fbig, fill=(0, 0, 0, 150))
+    ds.text((W / 2 - bw2 / 2 + 14, 500 + OFF + 18), big, font=fbig, fill=(0, 0, 0, 150))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10)))
     d = ImageDraw.Draw(img)
-    d.text((W / 2 - bw2 / 2, 500), big, font=fbig, fill=big_c, stroke_width=16, stroke_fill=stroke)
+    d.text((W / 2 - bw2 / 2, 500 + OFF), big, font=fbig, fill=big_c, stroke_width=16, stroke_fill=stroke)
     # bottom line with highlight
     if th.get("bottom"):
         fbo = fit_font(d, th["bottom"], "Black", 128, 980)
@@ -596,13 +604,13 @@ def make_thumb(spec, path):
             else:
                 dl2.text((x, 8), t, font=fbo, fill=WHITE)
             x += w
-        img.alpha_composite(layer, (0, 1010))
+        img.alpha_composite(layer, (0, 1010 + OFF))
     # icon
     ic = icon(th.get("icon", "sun"), 470)
-    sh2 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); sh2.alpha_composite(ic, (W // 2 - 235 + 12, 1230 + 16))
+    sh2 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); sh2.alpha_composite(ic, (W // 2 - 235 + 12, 1230 + OFF + 16))
     r_, g_, b_, a_ = sh2.split(); sh2 = Image.merge("RGBA", (r_.point(lambda v: 0), g_.point(lambda v: 0), b_.point(lambda v: 0), a_.point(lambda v: int(v * 0.35))))
     img.alpha_composite(sh2.filter(ImageFilter.GaussianBlur(12)))
-    img.alpha_composite(ic, (W // 2 - 235, 1230))
+    img.alpha_composite(ic, (W // 2 - 235, 1230 + OFF))
     img.convert("RGB").save(path)
     return path
 
