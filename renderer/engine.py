@@ -379,7 +379,8 @@ def wave_reveal(img, colored, plain, t, start=0.5, dur=0.9):
 
 def legend(img, items, y=1262):
     d = ImageDraw.Draw(img); f = font(34, "Bold")
-    x = 50
+    tot = sum(52 + text_w(d, lbl, f) + 36 for lbl, _ in items) - 36
+    x = W - 50 - tot  # 오른쪽 정렬 (제주도와 겹치지 않게)
     for lbl, col in items:
         d.rounded_rectangle([x, y + 8, x + 40, y + 48], radius=10, fill=col)
         d.text((x + 52, y + 4), lbl, font=f, fill=WHITE)
@@ -450,7 +451,7 @@ def sc_models(img, sc, spec, t, T):
     vmax = max([abs(float(i["value"])) for i in items] + [1e-6])
     unit = sc.get("unit", "")
     x0, x1 = 90, 990; colw = (x1 - x0) / n
-    base = 1150; maxh = 560
+    base = 1100; maxh = 540
     fv = font(64, "Black"); fn = font(48, "Black"); fs = font(30, "Bold")
     for i, it in enumerate(items):
         cx = x0 + colw * (i + 0.5); col = tuple(it.get("color", MODEL_COL[i % 4]))
