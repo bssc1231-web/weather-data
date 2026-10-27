@@ -116,7 +116,7 @@ def fetch_air(key, now):
         for day in (now, now - dt.timedelta(days=1)):
             r = get(url, {"serviceKey": key, "returnType": "json", "numOfRows": 100, "pageNo": 1,
                           "searchDate": day.strftime("%Y-%m-%d"), "InformCode": code})
-            items = r.json()["response"]["body"]["items"]
+            items = [x for x in (r.json()["response"]["body"]["items"] or []) if x.get("informCode") == code]
             if items: res = items; break
         if not res: errors.append(f"air {code}: no items"); continue
         res.sort(key=lambda x: x.get("dataTime", ""), reverse=True)
