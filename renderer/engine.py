@@ -497,7 +497,7 @@ def sc_outro(img, sc, spec, t, T):
     a = ease_out(t / 0.5)
     fb = font(110, "Black"); brand = spec.get("brand", "")
     d.text((W / 2 - text_w(d, brand, fb) / 2, 560 - 30 * (1 - a)), brand, font=fb, fill=(255, 214, 64, int(255 * a)))
-    fc = font(54, "Bold"); cta = sc.get("cta", "매일 아침 6시, 구독하고 받아보기")
+    fc = font(54, "Bold"); cta = sc.get("cta", "매일 아침 8시, 구독하고 받아보기")
     d.text((W / 2 - text_w(d, cta, fc) / 2, 720), cta, font=fc, fill=(255, 255, 255, int(255 * a)))
     fs = font(36, "Medium")
     src = "자료: " + " · ".join(sc.get("sources", []))
