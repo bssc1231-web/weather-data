@@ -22,6 +22,11 @@ spec.json:
   models    : title, unit, note, items[{name:"유럽", sub:"ECMWF", value:12}] (2~4개)
   tip       : headline({강조}), icon(umbrella|coat|mask|sun|...), lines
   outro     : sources["기상청", ...], cta
+
+썸네일 (spec 최상위 "thumb", 렌더링 때 out/thumbnail.png 1080x1920 생성, --thumb 로 썸네일만):
+  "thumb": {"theme": "sunny|cold|rain|snow|hot|dust|cloudy", "top": "춘천 아침",
+            "big": "-2°", "bottom": "출근길 {꽁꽁}", "icon": "sun|partly|cloud|rain|shower|snow|umbrella|coat|mask"}
+  top: 큰 숫자 위 짧은 문구(8자 안팎), big: 제일 큰 숫자/단어(5자 이내), bottom: 결론 한 줄(10자 안팎, {강조} 1곳)
 """
 import json, math, os, re, subprocess, sys
 import numpy as np
@@ -506,6 +511,101 @@ def sc_outro(img, sc, spec, t, T):
     for ln in lines:
         s = "".join(t_ for t_, _ in ln).strip(); d.text((W / 2 - text_w(d, s, fs) / 2, y), s, font=fs, fill=(170, 195, 225)); y += 50
 
+# ---------- thumbnail ----------
+THEMES = {  # top color, bottom color, big-number color, stroke
+    "sunny": ((255, 170, 40), (40, 140, 255), (255, 255, 255), (20, 60, 140)),
+    "cold": ((10, 40, 110), (90, 200, 255), (255, 255, 255), (10, 30, 90)),
+    "rain": ((20, 28, 45), (55, 85, 125), (120, 200, 255), (5, 10, 25)),
+    "snow": ((70, 95, 140), (200, 225, 245), (255, 255, 255), (30, 50, 100)),
+    "hot": ((255, 200, 40), (225, 40, 30), (255, 255, 255), (120, 10, 10)),
+    "dust": ((150, 120, 80), (90, 80, 70), (255, 214, 64), (40, 30, 20)),
+    "cloudy": ((90, 105, 130), (160, 175, 195), (255, 255, 255), (30, 40, 60)),
+}
+
+def fit_font(d, text, weight, size, maxw):
+    while size > 40:
+        f = font(size, weight)
+        if d.textlength(re.sub(r"[{}]", "", text), font=f) <= maxw: return f
+        size -= 6
+    return font(size, weight)
+
+def make_thumb(spec, path):
+    th = spec.get("thumb") or {}
+    name = th.get("theme", "sunny"); top, bot, big_c, stroke = THEMES.get(name, THEMES["sunny"])
+    y = np.linspace(0, 1, H)[:, None, None]
+    arr = (np.array(top) * (1 - y) + np.array(bot) * y).repeat(W, axis=1)
+    yy, xx = np.mgrid[0:H, 0:W]
+    glow = np.exp(-(((xx - 540) / 600) ** 2 + ((yy - 700) / 500) ** 2))[:, :, None]
+    arr = arr + glow * 40
+    img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    fx = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(fx)
+    rng = np.random.default_rng(7)
+    if name == "rain":
+        for _ in range(220):
+            x, yv = rng.integers(-100, W), rng.integers(-100, H); L = rng.integers(40, 110)
+            d.line([(x, yv), (x - L * 0.35, yv + L)], fill=(170, 210, 255, int(rng.integers(60, 140))), width=int(rng.integers(2, 5)))
+    elif name in ("snow", "cold"):
+        for _ in range(160 if name == "snow" else 70):
+            x, yv = rng.integers(0, W), rng.integers(0, H); r = rng.integers(3, 10 if name == "snow" else 6)
+            d.ellipse([x - r, yv - r, x + r, yv + r], fill=(255, 255, 255, int(rng.integers(90, 200))))
+    elif name == "dust":
+        for _ in range(40):
+            x, yv = rng.integers(0, W), rng.integers(0, H); r = rng.integers(60, 200)
+            d.ellipse([x - r, yv - r, x + r, yv + r], fill=(210, 190, 150, 18))
+    elif name in ("sunny", "hot"):
+        cx, cy = 880, 260
+        for i in range(16):
+            a = i * math.pi / 8
+            d.polygon([(cx, cy), (cx + math.cos(a - 0.08) * 1400, cy + math.sin(a - 0.08) * 1400),
+                       (cx + math.cos(a + 0.08) * 1400, cy + math.sin(a + 0.08) * 1400)], fill=(255, 255, 255, 22))
+    img.alpha_composite(fx.filter(ImageFilter.GaussianBlur(1.2)))
+    d = ImageDraw.Draw(img)
+    # brand + date
+    fb = font(52, "Black"); brand = spec.get("brand", "")
+    bw = d.textlength(brand, font=fb) + 56
+    d.rounded_rectangle([60, 120, 60 + bw, 206], radius=43, fill=(255, 214, 64))
+    d.text((88, 128), brand, font=fb, fill=INK)
+    fd = font(46, "Bold"); dl = re.sub(r"\s*·.*$", "", spec.get("date_label", ""))
+    d.text((60 + bw + 24, 136), dl, font=fd, fill=WHITE, stroke_width=4, stroke_fill=stroke)
+    # top line
+    if th.get("top"):
+        ft = fit_font(d, th["top"], "Black", 130, 960)
+        tw = d.textlength(th["top"], font=ft)
+        d.text((W / 2 - tw / 2, 330), th["top"], font=ft, fill=WHITE, stroke_width=10, stroke_fill=stroke)
+    # big number with shadow
+    big = th.get("big", "")
+    fbig = fit_font(d, big, "Black", 400, 1000)
+    bw2 = d.textlength(big, font=fbig)
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ds = ImageDraw.Draw(sh)
+    ds.text((W / 2 - bw2 / 2 + 14, 500 + 18), big, font=fbig, fill=(0, 0, 0, 150))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10)))
+    d = ImageDraw.Draw(img)
+    d.text((W / 2 - bw2 / 2, 500), big, font=fbig, fill=big_c, stroke_width=16, stroke_fill=stroke)
+    # bottom line with highlight
+    if th.get("bottom"):
+        fbo = fit_font(d, th["bottom"], "Black", 128, 980)
+        layer = Image.new("RGBA", (W, 400), (0, 0, 0, 0)); dl2 = ImageDraw.Draw(layer)
+        segs = parse_hl(th["bottom"]); total = sum(dl2.textlength(t, font=fbo) for t, _ in segs)
+        x = W / 2 - total / 2
+        dl2.rounded_rectangle([x - 34, 0, x + total + 34, fbo.size * 1.45], radius=30, fill=(10, 16, 30, 230))
+        for t, h in segs:
+            w = dl2.textlength(t, font=fbo)
+            if h:
+                dl2.rounded_rectangle([x - 6, fbo.size * 0.2, x + w + 6, fbo.size * 1.32], radius=14, fill=HL)
+                dl2.text((x, 8), t, font=fbo, fill=INK)
+            else:
+                dl2.text((x, 8), t, font=fbo, fill=WHITE)
+            x += w
+        img.alpha_composite(layer, (0, 1010))
+    # icon
+    ic = icon(th.get("icon", "sun"), 470)
+    sh2 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); sh2.alpha_composite(ic, (W // 2 - 235 + 12, 1230 + 16))
+    r_, g_, b_, a_ = sh2.split(); sh2 = Image.merge("RGBA", (r_.point(lambda v: 0), g_.point(lambda v: 0), b_.point(lambda v: 0), a_.point(lambda v: int(v * 0.35))))
+    img.alpha_composite(sh2.filter(ImageFilter.GaussianBlur(12)))
+    img.alpha_composite(ic, (W // 2 - 235, 1230))
+    img.convert("RGB").save(path)
+    return path
+
 SCENES = {"hook": sc_hook, "map_temp": sc_map_temp, "map_region": sc_map_region, "rain_map": sc_rain_map,
           "timeline": sc_timeline, "models": sc_models, "tip": sc_tip, "outro": sc_outro}
 
@@ -547,6 +647,9 @@ def main():
     out = sys.argv[2]; os.makedirs(out, exist_ok=True)
     tl, total = build_timeline(spec)
     print(f"예상 길이: {total:.1f}초 ({sum(len(x[3]) for x in tl)}문장)")
+    if spec.get("thumb"):
+        print("thumbnail ->", make_thumb(spec, os.path.join(out, "thumbnail.png")))
+    if "--thumb" in sys.argv: return
     if "--preview" in sys.argv:
         frames = []
         for st, en, sc, ls in tl:
