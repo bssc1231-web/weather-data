@@ -242,6 +242,7 @@ def fetch_gfs(now_utc):
 def main():
     now = dt.datetime.now(KST)
     key = os.environ.get("DATA_GO_KR_KEY", "").strip()
+    log(f"DATA_GO_KR_KEY: {'있음 (' + str(len(key)) + '자)' if key else '없음'}")
     data = {"generated_at": now.isoformat(), "kma": None, "air": None, "models": {}, "errors": errors}
     steps = []
     if key:
