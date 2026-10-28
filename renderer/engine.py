@@ -527,13 +527,18 @@ def sc_outro(img, sc, spec, t, T):
 # ---------- thumbnail ----------
 THEMES = {  # top color, bottom color, big-number color, stroke
     "sunny": ((255, 170, 40), (40, 140, 255), (255, 255, 255), (20, 60, 140)),
-    "cold": ((10, 40, 110), (90, 200, 255), (255, 255, 255), (10, 30, 90)),
-    "rain": ((20, 28, 45), (55, 85, 125), (120, 200, 255), (5, 10, 25)),
-    "snow": ((70, 95, 140), (200, 225, 245), (255, 255, 255), (30, 50, 100)),
+    "cold": ((26, 66, 142), (100, 205, 255), (255, 255, 255), (10, 30, 90)),
+    "rain": ((40, 56, 84), (82, 116, 160), (120, 200, 255), (5, 10, 25)),
+    "snow": ((84, 110, 155), (200, 225, 245), (255, 255, 255), (30, 50, 100)),
     "hot": ((255, 200, 40), (225, 40, 30), (255, 255, 255), (120, 10, 10)),
-    "dust": ((150, 120, 80), (90, 80, 70), (255, 214, 64), (40, 30, 20)),
-    "cloudy": ((90, 105, 130), (160, 175, 195), (255, 255, 255), (30, 40, 60)),
+    "dust": ((165, 135, 95), (110, 98, 86), (255, 214, 64), (40, 30, 20)),
+    "cloudy": ((104, 120, 146), (160, 175, 195), (255, 255, 255), (30, 40, 60)),
 }
+
+def text_vcenter(d, cx, cy, text, f, fill):
+    """글자 실제 모양(bbox) 기준으로 (cx, cy)에 가로·세로 가운데 정렬"""
+    b = d.textbbox((0, 0), text, font=f)
+    d.text((cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2), text, font=f, fill=fill)
 
 def fit_font(d, text, weight, size, maxw):
     while size > 40:
@@ -549,7 +554,7 @@ def make_thumb(spec, path):
     arr = (np.array(top) * (1 - y) + np.array(bot) * y).repeat(W, axis=1)
     yy, xx = np.mgrid[0:H, 0:W]
     glow = np.exp(-(((xx - 540) / 600) ** 2 + ((yy - 700) / 500) ** 2))[:, :, None]
-    arr = arr + glow * 40
+    arr = arr + glow * 48
     img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
     fx = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(fx)
     rng = np.random.default_rng(7)
@@ -577,7 +582,7 @@ def make_thumb(spec, path):
     fb = font(46, "Black"); brand = spec.get("brand", "")
     bw = d.textlength(brand, font=fb) + 48
     d.rounded_rectangle([W / 2 - bw / 2, 96, W / 2 + bw / 2, 172], radius=38, fill=(255, 214, 64))
-    d.text((W / 2 - bw / 2 + 24, 103), brand, font=fb, fill=INK)
+    text_vcenter(d, W / 2, 134, brand, fb, INK)
     dl = re.sub(r"\s*·.*$", "", spec.get("date_label", ""))
     m = re.match(r"\s*(\d{1,2})\.(\d{1,2})\s*\((.)\)", dl)
     dtxt = f"{int(m.group(1))}월 {int(m.group(2))}일 {m.group(3)}요일" if m else dl
@@ -586,7 +591,7 @@ def make_thumb(spec, path):
         [W / 2 - dw / 2 - 44 + 8, 196 + 12, W / 2 + dw / 2 + 44 + 8, 330 + 12], radius=30, fill=(0, 0, 0, 110))
     img.alpha_composite(sh0.filter(ImageFilter.GaussianBlur(8))); d = ImageDraw.Draw(img)
     d.rounded_rectangle([W / 2 - dw / 2 - 44, 196, W / 2 + dw / 2 + 44, 330], radius=30, fill=(255, 255, 255))
-    d.text((W / 2 - dw / 2, 208), dtxt, font=fdt, fill=INK)
+    text_vcenter(d, W / 2, 263, dtxt, fdt, INK)
     OFF = 60
     # top line
     if th.get("top"):
@@ -608,14 +613,18 @@ def make_thumb(spec, path):
         layer = Image.new("RGBA", (W, 400), (0, 0, 0, 0)); dl2 = ImageDraw.Draw(layer)
         segs = parse_hl(th["bottom"]); total = sum(dl2.textlength(t, font=fbo) for t, _ in segs)
         x = W / 2 - total / 2
-        dl2.rounded_rectangle([x - 34, 0, x + total + 34, fbo.size * 1.45], radius=30, fill=(10, 16, 30, 230))
+        bh = fbo.size * 1.45; cy = bh / 2
+        dl2.rounded_rectangle([x - 34, 0, x + total + 34, bh], radius=30, fill=(10, 16, 30, 230))
+        plain = re.sub(r"[{}]", "", th["bottom"]); gb = dl2.textbbox((0, 0), plain, font=fbo)
+        ty = cy - (gb[1] + gb[3]) / 2  # 글자 실제 모양 기준 세로 가운데
+        hh = fbo.size * 0.56
         for t, h in segs:
             w = dl2.textlength(t, font=fbo)
             if h:
-                dl2.rounded_rectangle([x - 6, fbo.size * 0.2, x + w + 6, fbo.size * 1.32], radius=14, fill=HL)
-                dl2.text((x, 8), t, font=fbo, fill=INK)
+                dl2.rounded_rectangle([x - 6, cy - hh, x + w + 6, cy + hh], radius=14, fill=HL)
+                dl2.text((x, ty), t, font=fbo, fill=INK)
             else:
-                dl2.text((x, 8), t, font=fbo, fill=WHITE)
+                dl2.text((x, ty), t, font=fbo, fill=WHITE)
             x += w
         img.alpha_composite(layer, (0, 1010 + OFF))
     # icon
