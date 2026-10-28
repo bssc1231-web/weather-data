@@ -317,6 +317,19 @@ def sc_hook(img, sc, spec, t, T):
         d.text((W / 2 - nw / 2, y + 20), sc["note"], font=fn, fill=(190, 210, 235))
     img.alpha_composite(fade(layer, a), (0, 820 + int(40 * (1 - a))))
 
+def soft_text(img, xy, text, f, fill, shadow=(0, 0, 0), alpha=150, blur=8, offset=(0, 6), glow=0):
+    """글자 + 부드러운 그림자(블러). 두꺼운 테두리 대신 사용. glow>0 이면 주변에 은은한 어두운 번짐 추가"""
+    pad = int(blur * 3 + max(abs(offset[0]), abs(offset[1])) + glow + 4)
+    bb = ImageDraw.Draw(img).textbbox(xy, text, font=f)
+    x0, y0 = int(bb[0]) - pad, int(bb[1]) - pad
+    sh = Image.new("RGBA", (int(bb[2] - bb[0]) + pad * 2, int(bb[3] - bb[1]) + pad * 2), (0, 0, 0, 0))
+    ds = ImageDraw.Draw(sh); lx, ly = xy[0] - x0, xy[1] - y0
+    a = alpha if isinstance(fill, tuple) and len(fill) == 3 else int(alpha * (fill[3] / 255))
+    if glow: ds.text((lx, ly), text, font=f, fill=shadow + (int(a * 0.7),), stroke_width=glow, stroke_fill=shadow + (int(a * 0.7),))
+    ds.text((lx + offset[0], ly + offset[1]), text, font=f, fill=shadow + (a,))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(blur)), (x0, y0))
+    ImageDraw.Draw(img).text(xy, text, font=f, fill=fill)
+
 def marker(img, cx, cy, name, temp, sky, s):
     if s <= 0.01: return
     R = 50; S = 190
@@ -329,7 +342,7 @@ def marker(img, cx, cy, name, temp, sky, s):
     d.text((c - tw / 2 + 6, cy0 - 30), txt, font=ft, fill=WHITE, stroke_width=2, stroke_fill=tuple(int(v * 0.6) for v in col))
     ic = icon(sky, 74); lay.alpha_composite(ic, (int(c - R - 30), int(cy0 - R - 34)))
     fn = font(30, "Black"); nw = d.textlength(name, font=fn)
-    d.text((c - nw / 2, cy0 + R + 6), name, font=fn, fill=WHITE, stroke_width=4, stroke_fill=(10, 24, 48))
+    soft_text(lay, (c - nw / 2, cy0 + R + 6), name, fn, WHITE, shadow=(8, 20, 42), alpha=230, blur=3, offset=(0, 2), glow=2); d = ImageDraw.Draw(lay)
     if s != 1:
         k = max(0.05, s); lay = lay.resize((max(1, int(S * k)), max(1, int(S * k))), Image.LANCZOS)
     img.alpha_composite(lay, (int(cx - lay.width / 2), int(cy - lay.height / 2 + 10)))
@@ -419,7 +432,7 @@ def sc_rain_map(img, sc, spec, t, T):
             poly = max(PROVS[k2], key=len); xs = [p[0] for p in poly]; ys = [p[1] for p in poly]
             cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
             s = f"{int(float(v))}%"; tw = text_w(d, s, f)
-            d.text((cx - tw / 2, cy - 24), s, font=f, fill=(255, 255, 255, int(255 * a)), stroke_width=4, stroke_fill=(10, 30, 60))
+            soft_text(img, (cx - tw / 2, cy - 24), s, f, (255, 255, 255, int(255 * a)), shadow=(10, 30, 60), alpha=220, blur=4, offset=(0, 2), glow=2)
     legend(img, [("0~30%", pop_color(15)), ("30~60%", pop_color(45)), ("60%+", pop_color(80))])
 
 def sc_timeline(img, sc, spec, t, T):
@@ -502,7 +515,7 @@ def sc_outro(img, sc, spec, t, T):
     a = ease_out(t / 0.5)
     fb = font(110, "Black"); brand = spec.get("brand", "")
     d.text((W / 2 - text_w(d, brand, fb) / 2, 560 - 30 * (1 - a)), brand, font=fb, fill=(255, 214, 64, int(255 * a)))
-    fc = font(54, "Bold"); cta = sc.get("cta", "매일 아침 8시, 구독하고 받아보기")
+    fc = font(54, "Bold"); cta = sc.get("cta", "매일 저녁 8시, 내일 날씨 미리 받아보기")
     d.text((W / 2 - text_w(d, cta, fc) / 2, 720), cta, font=fc, fill=(255, 255, 255, int(255 * a)))
     fs = font(36, "Medium")
     src = "자료: " + " · ".join(sc.get("sources", []))
@@ -572,14 +585,14 @@ def make_thumb(spec, path):
     sh0 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); ImageDraw.Draw(sh0).rounded_rectangle(
         [W / 2 - dw / 2 - 44 + 8, 196 + 12, W / 2 + dw / 2 + 44 + 8, 330 + 12], radius=30, fill=(0, 0, 0, 110))
     img.alpha_composite(sh0.filter(ImageFilter.GaussianBlur(8))); d = ImageDraw.Draw(img)
-    d.rounded_rectangle([W / 2 - dw / 2 - 44, 196, W / 2 + dw / 2 + 44, 330], radius=30, fill=(255, 255, 255), outline=stroke, width=6)
+    d.rounded_rectangle([W / 2 - dw / 2 - 44, 196, W / 2 + dw / 2 + 44, 330], radius=30, fill=(255, 255, 255))
     d.text((W / 2 - dw / 2, 208), dtxt, font=fdt, fill=INK)
     OFF = 60
     # top line
     if th.get("top"):
         ft = fit_font(d, th["top"], "Black", 130, 960)
         tw = d.textlength(th["top"], font=ft)
-        d.text((W / 2 - tw / 2, 330 + OFF), th["top"], font=ft, fill=WHITE, stroke_width=10, stroke_fill=stroke)
+        soft_text(img, (W / 2 - tw / 2, 330 + OFF), th["top"], ft, WHITE, shadow=stroke, alpha=190, blur=12, offset=(0, 8), glow=4); d = ImageDraw.Draw(img)
     # big number with shadow
     big = th.get("big", "")
     fbig = fit_font(d, big, "Black", 400, 1000)
@@ -588,7 +601,7 @@ def make_thumb(spec, path):
     ds.text((W / 2 - bw2 / 2 + 14, 500 + OFF + 18), big, font=fbig, fill=(0, 0, 0, 150))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10)))
     d = ImageDraw.Draw(img)
-    d.text((W / 2 - bw2 / 2, 500 + OFF), big, font=fbig, fill=big_c, stroke_width=16, stroke_fill=stroke)
+    soft_text(img, (W / 2 - bw2 / 2, 500 + OFF), big, fbig, big_c, shadow=stroke, alpha=170, blur=18, offset=(0, 4), glow=8); d = ImageDraw.Draw(img)
     # bottom line with highlight
     if th.get("bottom"):
         fbo = fit_font(d, th["bottom"], "Black", 128, 980)
