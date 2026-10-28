@@ -26,6 +26,8 @@ spec.json:
 썸네일 (spec 최상위 "thumb", 렌더링 때 out/thumbnail.png 1080x1920 생성, --thumb 로 썸네일만):
   "thumb": {"theme": "sunny|cold|rain|snow|hot|dust|cloudy", "top": "춘천 아침",
             "big": "-2°", "bottom": "출근길 {꽁꽁}", "icon": "sun|partly|cloud|rain|shower|snow|umbrella|coat|mask"}
+  배경색은 테마(날씨) + 기온으로 자동 결정: map_temp 도시 기온으로 계산 (thumb.temp 로 직접 지정 가능,
+  영상 배경도 기온에 따라 추우면 남색, 더우면 와인빛으로 은은하게 바뀜. spec "mood": {"temp": N} 로 직접 지정 가능)
   top: 큰 숫자 위 짧은 문구(8자 안팎), big: 제일 큰 숫자/단어(5자 이내), bottom: 결론 한 줄(10자 안팎, {강조} 1곳)
 """
 import json, math, os, re, subprocess, sys
@@ -116,6 +118,50 @@ CITY = {
     "부산": (129.08, 35.18, (800, 990)), "제주": (126.53, 33.50, (520, 1200)),
     "울릉도": (130.87, 37.49, (915, 385)), "독도": (131.87, 37.24, None),
 }
+
+# ---------- 기온·날씨에 따른 색 ----------
+def _avg(xs): return sum(xs) / len(xs) if xs else None
+def mood_temps(spec):
+    """map_temp 장면 도시들의 (아침 최저 평균, 낮 최고 평균). spec["mood"]["temp"] 가 있으면 그 값을 우선"""
+    mins, maxs = [], []
+    for sc in spec.get("scenes", []):
+        if sc.get("type") == "map_temp":
+            for c in sc.get("cities", {}).values():
+                if "min" in c: mins.append(float(c["min"]))
+                if "max" in c: maxs.append(float(c["max"]))
+            break
+    return _avg(mins), _avg(maxs)
+def mood_temp(spec):
+    m = spec.get("mood") or {}
+    if "temp" in m: return float(m["temp"])
+    a, b = mood_temps(spec)
+    return None if a is None or b is None else (a + b) / 2
+
+# 영상 배경 (위, 아래, 지도 뒤 빛): 추우면 남색·인디고, 따뜻하면 자주·와인 쪽으로 은은하게
+VIDEO_STOPS = [(-10, (12, 14, 58), (26, 40, 120), (60, 84, 175)),
+               (0, (8, 22, 60), (16, 56, 120), (40, 94, 165)),
+               (10, (10, 24, 48), (18, 58, 104), (40, 90, 150)),
+               (18, (14, 26, 50), (30, 62, 104), (56, 96, 150)),
+               (25, (30, 22, 46), (78, 50, 86), (120, 80, 120)),
+               (32, (46, 16, 28), (116, 38, 48), (160, 70, 70))]
+def _interp(stops, t):
+    if t <= stops[0][0]: return stops[0][1:]
+    for a, b in zip(stops, stops[1:]):
+        if t <= b[0]:
+            k = (t - a[0]) / (b[0] - a[0])
+            return tuple(tuple(int(x + (y - x) * k) for x, y in zip(ca, cb)) for ca, cb in zip(a[1:], b[1:]))
+    return stops[-1][1:]
+def _desat(c, k):
+    g = sum(c) / 3; return tuple(int(v + (g - v) * k) for v in c)
+def set_mood(spec):
+    """영상 배경색을 그날 기온·날씨에 맞게 설정 (렌더 전에 한 번)"""
+    global BG_TOP, BG_BOT, SEA_GLOW, _BG
+    t = mood_temp(spec)
+    if t is None: return
+    top, bot, glow = _interp(VIDEO_STOPS, t)
+    if (spec.get("thumb") or {}).get("theme") in ("rain", "cloudy", "dust"):  # 궂은 날은 살짝 회색빛
+        top, bot, glow = (_desat(c, 0.3) for c in (top, bot, glow))
+    BG_TOP, BG_BOT, SEA_GLOW = top, bot, glow; _BG = None
 
 def gradient_bg():
     y = np.linspace(0, 1, H)[:, None, None]
@@ -540,6 +586,33 @@ def text_vcenter(d, cx, cy, text, f, fill):
     b = d.textbbox((0, 0), text, font=f)
     d.text((cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2), text, font=f, fill=fill)
 
+# 썸네일 기온 구간별 색 (위, 아래, 그림자) — 구간을 나눠서 색이 탁해지지 않게
+TEMP_BANDS = [(-5, (16, 24, 92), (72, 122, 222), (8, 14, 60)),        # 혹한
+              (3, (26, 66, 142), (100, 205, 255), (10, 30, 90)),      # 추움
+              (10, (34, 102, 182), (122, 202, 246), (12, 44, 100)),   # 쌀쌀
+              (17, (36, 148, 198), (150, 226, 214), (10, 60, 90)),    # 선선
+              (24, (255, 190, 80), (70, 160, 240), (30, 70, 140)),    # 포근
+              (29, (255, 160, 50), (245, 110, 70), (120, 40, 20)),    # 따뜻
+              (99, (255, 130, 40), (215, 45, 40), (120, 10, 10))]     # 더움
+def temp_band(t):
+    for hi, top, bot, st in TEMP_BANDS:
+        if t <= hi: return top, bot, st
+    return TEMP_BANDS[-1][1:]
+def thumb_colors(spec, name):
+    top, bot, big_c, stroke = THEMES.get(name, THEMES["sunny"])
+    th = spec.get("thumb") or {}
+    if "temp" in th: t = float(th["temp"])
+    else:
+        a, b = mood_temps(spec)
+        if a is None: return top, bot, big_c, stroke
+        t = a if name == "cold" else b if name in ("hot", "sunny") else (a + b) / 2
+    bt, bb, bs = temp_band(t)
+    if name in ("sunny", "cold", "hot"):  # 기온이 주인공인 테마: 기온 색 그대로
+        return bt, bb, big_c, bs
+    k = 0.25  # 비·눈·흐림·미세먼지: 날씨 색 유지하고 기온 색을 살짝 섞음
+    mix = lambda c1, c2: tuple(int(x * (1 - k) + y * k) for x, y in zip(c1, c2))
+    return mix(top, bt), mix(bot, bb), big_c, stroke
+
 def fit_font(d, text, weight, size, maxw):
     while size > 40:
         f = font(size, weight)
@@ -549,7 +622,7 @@ def fit_font(d, text, weight, size, maxw):
 
 def make_thumb(spec, path):
     th = spec.get("thumb") or {}
-    name = th.get("theme", "sunny"); top, bot, big_c, stroke = THEMES.get(name, THEMES["sunny"])
+    name = th.get("theme", "sunny"); top, bot, big_c, stroke = thumb_colors(spec, name)
     y = np.linspace(0, 1, H)[:, None, None]
     arr = (np.array(top) * (1 - y) + np.array(bot) * y).repeat(W, axis=1)
     yy, xx = np.mgrid[0:H, 0:W]
@@ -675,6 +748,7 @@ def srt_time(x):
 def main():
     spec = json.load(open(sys.argv[1], encoding="utf-8"))
     out = sys.argv[2]; os.makedirs(out, exist_ok=True)
+    set_mood(spec)
     tl, total = build_timeline(spec)
     print(f"예상 길이: {total:.1f}초 ({sum(len(x[3]) for x in tl)}문장)")
     if spec.get("thumb"):
