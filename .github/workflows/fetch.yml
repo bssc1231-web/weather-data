@@ -1,7 +1,8 @@
 name: fetch-weather
 on:
   schedule:
-    - cron: "17 21 * * *"   # 매일 06:17 KST (기상청·에어코리아 05시 발표 반영)
+    - cron: "27 8 * * *"    # 매일 17:27 KST (기상청·에어코리아 17시 발표 반영, 내일 날씨용)
+    - cron: "57 8 * * *"    # 17:57 KST 예비 수집 (스케줄 누락 대비)
   workflow_dispatch: {}      # Actions 탭에서 수동 실행 가능
   push:                      # 스크립트가 바뀌면 바로 테스트 실행
     branches: [main]
