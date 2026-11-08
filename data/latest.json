@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-09T00:28:50.130066+09:00",
+ "generated_at": "2026-11-09T00:38:24.057019+09:00",
  "kma": {
   "base_date": "20261108",
   "base_time": "2300",
@@ -14,7 +14,7 @@
       "min": 4.0,
       "max": 13.0,
       "pop_max": 60,
-      "sky_am": "구름많음",
+      "sky_am": "흐림",
       "pop_am": 30,
       "sky_pm": "맑음",
       "pop_pm": 20
@@ -32,7 +32,7 @@
       "min": 3.0,
       "max": 15.0,
       "pop_max": 20,
-      "sky_am": "맑음",
+      "sky_am": "구름많음",
       "pop_am": 20,
       "sky_pm": "맑음",
       "pop_pm": 0
@@ -41,7 +41,7 @@
       "min": 5.0,
       "max": 17.0,
       "pop_max": 20,
-      "sky_am": "맑음",
+      "sky_am": "구름많음",
       "pop_am": 20,
       "sky_pm": "맑음",
       "pop_pm": 0
@@ -1912,7 +1912,7 @@
       "min": 0.0,
       "max": 16.0,
       "pop_max": 20,
-      "sky_am": "맑음",
+      "sky_am": "구름많음",
       "pop_am": 20,
       "sky_pm": "맑음",
       "pop_pm": 0
@@ -8474,7 +8474,7 @@
       "min": 6.0,
       "max": 12.0,
       "pop_max": 60,
-      "sky_am": "구름많음",
+      "sky_am": "흐림",
       "pop_am": 30,
       "sky_pm": "비",
       "pop_pm": 60
@@ -11321,7 +11321,7 @@
       "min": 10.0,
       "max": 18.0,
       "pop_max": 20,
-      "sky_am": "맑음",
+      "sky_am": "구름많음",
       "pop_am": 10,
       "sky_pm": "맑음",
       "pop_pm": 10
@@ -13174,7 +13174,7 @@
       "min": 5.0,
       "max": 14.0,
       "pop_max": 60,
-      "sky_am": "구름많음",
+      "sky_am": "흐림",
       "pop_am": 30,
       "sky_pm": "흐림",
       "pop_pm": 30
@@ -13201,7 +13201,7 @@
       "min": 1.0,
       "max": 17.0,
       "pop_max": 10,
-      "sky_am": "맑음",
+      "sky_am": "구름많음",
       "pop_am": 10,
       "sky_pm": "맑음",
       "pop_pm": 0
